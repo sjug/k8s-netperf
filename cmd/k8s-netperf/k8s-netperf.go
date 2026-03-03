@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cloud-bulldozer/go-commons/indexers"
-	ocpmetadata "github.com/cloud-bulldozer/go-commons/ocp-metadata"
-	"github.com/cloud-bulldozer/go-commons/prometheus"
-	cmdVersion "github.com/cloud-bulldozer/go-commons/version"
+	"github.com/cloud-bulldozer/go-commons/v2/indexers"
+	ocpmetadata "github.com/cloud-bulldozer/go-commons/v2/ocp-metadata"
+	"github.com/cloud-bulldozer/go-commons/v2/prometheus"
+	cmdVersion "github.com/cloud-bulldozer/go-commons/v2/version"
 	"github.com/cloud-bulldozer/k8s-netperf/pkg/archive"
 	"github.com/cloud-bulldozer/k8s-netperf/pkg/config"
 	"github.com/cloud-bulldozer/k8s-netperf/pkg/drivers"
@@ -252,7 +252,10 @@ var rootCmd = &cobra.Command{
 		if promURL != "" {
 			pcon.URL = promURL
 		}
-		pcon.Client, err = prometheus.NewClient(pcon.URL, pcon.Token, "", "", pcon.Verify)
+		if !pcon.OpenShift && metrics.IsMicroShift(client) {
+			pcon.MicroShift = true
+		}
+		pcon.Client, err = prometheus.NewClient(pcon.URL, pcon.Token, "", "", pcon.SkipTLSVerify)
 		if err != nil {
 			pavail = false
 			log.Warn("😥 Prometheus is not available")
@@ -526,14 +529,17 @@ var rootCmd = &cobra.Command{
 			}
 		}
 
-		node := metrics.NodeDetails(pcon)
-		sr.Kernel = node.Metric.Kernel
 		shortReg, _ := regexp.Compile(`([0-9]\.[0-9]+)-*`)
 		short := shortReg.FindString(sr.OCPVersion)
 		sr.OCPShortVersion = short
-		mtu, err := metrics.NodeMTU(pcon)
-		if err == nil {
-			sr.MTU = mtu
+
+		if pavail {
+			node := metrics.NodeDetails(pcon)
+			sr.Kernel = node.Metric.Kernel
+			mtu, err := metrics.NodeMTU(pcon)
+			if err == nil {
+				sr.MTU = mtu
+			}
 		}
 
 		if !json {
