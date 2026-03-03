@@ -219,6 +219,10 @@ var rootCmd = &cobra.Command{
 		if len(promURL) > 1 {
 			pcon.URL = promURL
 		}
+		if !pcon.OpenShift && metrics.IsMicroShift(client) {
+			pcon.MicroShift = true
+			pcon.Verify = false
+		}
 		pcon.Client, err = prometheus.NewClient(pcon.URL, pcon.Token, "", "", pcon.Verify)
 		if err != nil {
 			pavail = false
