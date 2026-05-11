@@ -7,6 +7,14 @@
 #	- gha-build	- build multi-architecture container image
 #	- gha-push - Push the image & manifest
 #   - clean - remove everything under bin/* directory
+#   - verify - alias for verify-fast (developer quick check)
+#   - verify-fast - static checks only (gofmt + golangci-lint)
+#   - verify-ci - CI bundle: verify-fast + unit tests
+#   - verify-go - Go static checks (gofmt + golangci-lint)
+#   - verify-gofmt - verifies Go files are gofmt -s formatted
+#   - update-gofmt - formats Go files with gofmt -s
+#   - verify-golangci - runs golangci-lint
+#   - test - runs Go unit tests
 
 ARCH=$(shell go env GOARCH)
 BIN = k8s-netperf
@@ -17,7 +25,9 @@ RHEL_VERSION = ubi9
 CONTAINER ?= podman
 CONTAINER_BUILD ?= podman build --force-rm
 CONTAINER_NS ?= quay.io/cloud-bulldozer
-SOURCES := $(shell find . -type f -name "*.go")
+GOFMT ?= gofmt
+GOLANGCI_LINT ?= golangci-lint
+SOURCES := $(shell find . -type f -name '*.go' -not -path './vendor/*' -not -path './bin/*')
 
 # k8s-netperf version
 GIT_COMMIT = $(shell git rev-parse HEAD)
@@ -29,6 +39,8 @@ ifeq ($(BRANCH),HEAD)
 else
 	VERSION := $(BRANCH)
 endif
+
+.PHONY: all build container-build gha-build gha-push clean verify verify-ci verify-fast verify-go verify-gofmt update-gofmt verify-golangci test
 
 all: build container-build
 
@@ -52,6 +64,31 @@ gha-push:
 
 clean:
 	rm -rf bin/$(ARCH)
+
+verify: verify-fast
+
+verify-fast: verify-go
+
+verify-ci: verify-fast test
+
+verify-go: verify-gofmt verify-golangci
+
+verify-gofmt:
+	@files="$$($(GOFMT) -s -l $(SOURCES))"; \
+	if [ -n "$$files" ]; then \
+		echo "Go files are not formatted. Run: make update-gofmt"; \
+		echo "$$files"; \
+		exit 1; \
+	fi
+
+update-gofmt:
+	$(GOFMT) -s -w $(SOURCES)
+
+verify-golangci:
+	$(GOLANGCI_LINT) run --timeout=5m
+
+test:
+	go test -v ./...
 
 $(BIN_PATH): $(SOURCES)
 	GOARCH=$(ARCH) CGO_ENABLED=$(CGO) go build -v -ldflags "-X $(CMD_VERSION).GitCommit=$(GIT_COMMIT) -X $(CMD_VERSION).BuildDate=$(BUILD_DATE) -X $(CMD_VERSION).Version=$(VERSION)" -o $(BIN_PATH) ./cmd/k8s-netperf
