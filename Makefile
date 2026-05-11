@@ -33,12 +33,12 @@ SOURCES := $(shell find . -type f -name '*.go' -not -path './vendor/*' -not -pat
 GIT_COMMIT = $(shell git rev-parse HEAD)
 BUILD_DATE = $(shell date '+%Y-%m-%d-%H:%M:%S')
 CMD_VERSION= github.com/cloud-bulldozer/go-commons/version
-BRANCH := $(shell git rev-parse --abbrev-ref HEAD)
-ifeq ($(BRANCH),HEAD)
-	VERSION := $(shell git describe --tags --abbrev=0)
-else
-	VERSION := $(BRANCH)
-endif
+VERSION = $(shell branch="$$(git rev-parse --abbrev-ref HEAD)"; \
+	if [ "$$branch" = "HEAD" ]; then \
+		git describe --tags --abbrev=0 2>/dev/null || git rev-parse --short HEAD; \
+	else \
+		echo "$$branch"; \
+	fi)
 
 .PHONY: all build container-build gha-build gha-push clean verify verify-ci verify-fast verify-go verify-gofmt update-gofmt verify-golangci test
 
