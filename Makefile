@@ -74,7 +74,11 @@ verify-ci: verify-fast test
 verify-go: verify-gofmt verify-golangci
 
 verify-gofmt:
-	@files="$$($(GOFMT) -s -l $(SOURCES))"; \
+	@files="$$($(GOFMT) -s -l $(SOURCES))"; status=$$?; \
+	if [ $$status -ne 0 ]; then \
+		echo "Failed to run gofmt check"; \
+		exit $$status; \
+	fi; \
 	if [ -n "$$files" ]; then \
 		echo "Go files are not formatted. Run: make update-gofmt"; \
 		echo "$$files"; \
