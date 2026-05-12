@@ -210,6 +210,18 @@ var rootCmd = &cobra.Command{
 		if err != nil {
 			log.Fatal(err)
 		}
+		var metadataAgent *ocpmetadata.Metadata
+		clusterInfo := ocpmetadata.ClusterInfo{}
+		if meta, err := ocpmetadata.NewMetadata(rconfig); err == nil {
+			metadataAgent = &meta
+			info, infoErr := metadataAgent.GetClusterInfo()
+			clusterInfo = info
+			if infoErr != nil {
+				log.Warnf("Cluster info discovery degraded: %v", infoErr)
+			}
+		} else {
+			log.Warnf("Cluster metadata client unavailable: %v", err)
+		}
 		if clean {
 			cleanup(client, rconfig)
 		}
@@ -248,11 +260,14 @@ var rootCmd = &cobra.Command{
 		}
 
 		pavail := true
-		pcon, _ := metrics.Discover()
+		pcon, _ := metrics.Discover(metadataAgent)
 		if promURL != "" {
 			pcon.URL = promURL
 		}
-		if !pcon.OpenShift && metrics.IsMicroShift(client) {
+		switch clusterInfo.Metadata.Distribution {
+		case ocpmetadata.DistributionOpenShift:
+			pcon.OpenShift = true
+		case ocpmetadata.DistributionMicroShift:
 			pcon.MicroShift = true
 		}
 		pcon.Client, err = prometheus.NewClient(pcon.URL, pcon.Token, "", "", pcon.SkipTLSVerify)
@@ -518,16 +533,7 @@ var rootCmd = &cobra.Command{
 			}
 		}
 
-		// Metadata
-		meta, err := ocpmetadata.NewMetadata(&s.RestConfig)
-		if err == nil {
-			metadata, err := meta.GetClusterMetadata()
-			if err == nil {
-				sr.ClusterMetadata = metadata
-			} else {
-				log.Error("Issue getting common metadata using go-commons")
-			}
-		}
+		sr.ClusterMetadata = clusterInfo.Metadata
 
 		shortReg, _ := regexp.Compile(`([0-9]\.[0-9]+)-*`)
 		short := shortReg.FindString(sr.OCPVersion)

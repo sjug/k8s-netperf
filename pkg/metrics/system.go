@@ -11,8 +11,6 @@ import (
 	"github.com/cloud-bulldozer/k8s-netperf/pkg/logging"
 	"github.com/prometheus/common/model"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
 )
 
 // NodeInfo stores the node metadata like IP and Hostname
@@ -71,23 +69,17 @@ type Details struct {
 	}
 }
 
-// Discover is to find Prometheus and generate an auth token if necessary.
-func Discover() (PromConnect, bool) {
+// Discover finds Prometheus and generates an auth token if necessary.
+func Discover(meta *ocpmetadata.Metadata) (PromConnect, bool) {
 	var conn PromConnect
-	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-		clientcmd.NewDefaultClientConfigLoadingRules(),
-		&clientcmd.ConfigOverrides{},
-	).ClientConfig()
-	if err != nil {
-		logging.Error(err)
+	if meta == nil {
+		logging.Info("😥 prometheus discovery failure")
+		logging.Error("cluster metadata client unavailable")
 		return conn, false
 	}
-	ocpMetadata, err := ocpmetadata.NewMetadata(config)
-	if err != nil {
-		logging.Error(err)
-		return conn, false
-	}
-	conn.URL, conn.Token, err = ocpMetadata.GetPrometheus()
+
+	var err error
+	conn.URL, conn.Token, err = meta.GetPrometheus()
 	if err != nil {
 		logging.Info("😥 prometheus discovery failure")
 		logging.Error(err)
@@ -95,33 +87,7 @@ func Discover() (PromConnect, bool) {
 	}
 	logging.Info("🔬 prometheus discovered at openshift-monitoring")
 	conn.SkipTLSVerify = true
-	conn.OpenShift = true
 	return conn, true
-}
-
-// IsMicroShift detects a MicroShift cluster by checking API groups.
-// MicroShift has route.openshift.io but lacks config.openshift.io.
-func IsMicroShift(client *kubernetes.Clientset) bool {
-	groups, err := client.Discovery().ServerGroups()
-	if err != nil {
-		logging.Warnf("Failed to discover server groups: %v", err)
-		return false
-	}
-	hasRoute := false
-	hasConfig := false
-	for _, g := range groups.Groups {
-		if g.Name == "route.openshift.io" {
-			hasRoute = true
-		}
-		if g.Name == "config.openshift.io" {
-			hasConfig = true
-		}
-	}
-	if hasRoute && !hasConfig {
-		logging.Info("🔬 Detected MicroShift cluster")
-		return true
-	}
-	return false
 }
 
 // NodeDetails returns the Details of the nodes. Only returning a single node info.

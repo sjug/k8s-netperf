@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/aclements/go-moremath v0.0.0-20210112150236-f10218a38794
-	github.com/cloud-bulldozer/go-commons/v2 v2.3.3
+	github.com/cloud-bulldozer/go-commons/v2 v2.3.4-0.20260512210602-c5f8cbbba3a3
 	github.com/google/uuid v1.6.0
 	github.com/melbahja/goph v1.4.0
 	github.com/montanaflynn/stats v0.7.0
@@ -21,6 +21,8 @@ require (
 	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
 	kubevirt.io/api v1.2.2
 )
+
+replace github.com/cloud-bulldozer/go-commons/v2 => ../go-commons
 
 require (
 	cloud.google.com/go/auth v0.18.1 // indirect
