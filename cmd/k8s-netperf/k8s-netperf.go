@@ -162,7 +162,7 @@ var rootCmd = &cobra.Command{
 			netperf = false
 		}
 		uid := ""
-		if len(id) > 0 {
+		if id != "" {
 			uid = id
 		} else {
 			u := uuid.New()
@@ -178,11 +178,11 @@ var rootCmd = &cobra.Command{
 		}
 
 		searchIndexName := index
-		if len(searchIndex) > 1 {
+		if searchIndex != "" {
 			searchIndexName = searchIndex
 		}
 		var esClient *indexers.Indexer
-		if len(searchURL) > 1 {
+		if searchURL != "" {
 			var err error
 			esClient, err = archive.Connect(searchURL, searchIndexName, true)
 			if err != nil {
@@ -249,7 +249,7 @@ var rootCmd = &cobra.Command{
 
 		pavail := true
 		pcon, _ := metrics.Discover()
-		if len(promURL) > 1 {
+		if promURL != "" {
 			pcon.URL = promURL
 		}
 		pcon.Client, err = prometheus.NewClient(pcon.URL, pcon.Token, "", "", pcon.Verify)
@@ -313,7 +313,7 @@ var rootCmd = &cobra.Command{
 				log.Error(err)
 			}
 			s.KClient = kclient
-			if len(bridge) > 0 {
+			if bridge != "" {
 				err := k8s.DeployNADBridge(s.DClient, bridge)
 				if err != nil {
 					log.Error(err)
@@ -440,18 +440,17 @@ var rootCmd = &cobra.Command{
 				nc.Metric = metric
 				nc.AcrossAZ = acrossAZ
 				// No need to run hostNetwork through Service.
-				var pr result.Data
 				for _, driver := range requestedDrivers {
 					if s.HostNetwork && !nc.Service {
-						pr = executeWorkload(nc, s, true, driver, false)
-						if len(pr.Profile) > 1 {
+						pr, ok := executeWorkload(nc, s, true, driver, false)
+						if ok {
 							sr.Results = append(sr.Results, pr)
 						}
 					}
 					// Skip podNetwork tests if hostNetOnly is enabled
 					if !hostNetOnly {
-						pr = executeWorkload(nc, s, false, driver, false)
-						if len(pr.Profile) > 1 {
+						pr, ok := executeWorkload(nc, s, false, driver, false)
+						if ok {
 							sr.Results = append(sr.Results, pr)
 						}
 					}
@@ -484,15 +483,14 @@ var rootCmd = &cobra.Command{
 				nc.Metric = metric
 				nc.AcrossAZ = acrossAZ
 				// No need to run hostNetwork through Service.
-				var pr result.Data
 				for _, driver := range requestedDrivers {
 					if s.HostNetwork && !nc.Service {
 						log.Info("VM does not support hostNetwork option... skiping")
 					}
 					// Skip podNetwork tests if hostNetOnly is enabled
 					if !hostNetOnly {
-						pr = executeWorkload(nc, s, false, driver, true)
-						if len(pr.Profile) > 1 {
+						pr, ok := executeWorkload(nc, s, false, driver, true)
+						if ok {
 							sr.Results = append(sr.Results, pr)
 						}
 					}
@@ -568,7 +566,7 @@ var rootCmd = &cobra.Command{
 			}
 		}
 
-		if len(searchURL) > 1 {
+		if searchURL != "" {
 			jdocs, err := archive.BuildDocs(sr, uid)
 			if err != nil {
 				log.Fatal(err)
@@ -674,11 +672,13 @@ func parseNetworkConfig(jsonFile string) (string, string, error) {
 	return serverIP, clientIP, nil
 }
 
-// executeWorkload executes the workload and returns the result data.
+// executeWorkload runs the workload and returns (result.Data, bool).
+// The bool is true when the result should be recorded and false when
+// the selected driver does not support the configured profile.
 func executeWorkload(nc config.Config,
 	s config.PerfScenarios,
 	hostNet bool,
-	driverName string, virt bool) result.Data {
+	driverName string, virt bool) (result.Data, bool) {
 	serverIP := ""
 	var err error
 	Client := s.Client
@@ -805,7 +805,7 @@ func executeWorkload(nc config.Config,
 	// Check if test is supported
 	if !driver.IsTestSupported() {
 		log.Warnf("Test %s is not supported with driver %s. Skipping.", nc.Profile, npr.Driver)
-		return npr
+		return npr, false
 	}
 	for i := 0; i < nc.Samples; i++ {
 		nr := sample.Sample{}
@@ -848,7 +848,7 @@ func executeWorkload(nc config.Config,
 	npr.ClientNodeInfo = s.ClientNodeInfo
 	npr.ServerNodeInfo = s.ServerNodeInfo
 
-	return npr
+	return npr, true
 }
 
 func main() {
